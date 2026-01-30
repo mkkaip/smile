@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>利用予定入力</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;margin:0;background:#f6f7f9;}
+    header{padding:14px 16px;background:#111;color:#fff;}
+    main{padding:16px;max-width:980px;margin:0 auto;}
+    .card{background:#fff;border-radius:12px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-bottom:12px;}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    label{font-size:12px;color:#333}
+    input,select,button{font-size:14px;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff;}
+    button{background:#111;color:#fff;border:none;cursor:pointer}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{border:1px solid #e6e6e6;padding:6px;vertical-align:middle}
+    th{background:#fafafa;position:sticky;top:0}
+    .small{font-size:11px;color:#666}
+    .msg{padding:10px;border-radius:10px}
+    .ok{background:#e8fff0;border:1px solid #b7f0c9}
+    .ng{background:#fff0f0;border:1px solid #f0b7b7}
+  </style>
+</head>
+<body>
+<header>
+  <div style="font-weight:700">利用予定 入力</div>
+  <div class="small">※配布リンク（児童名/トークン付き）から開いてください</div>
+</header>
+
+<main>
+  <div id="alert" class="card msg ng" style="display:none"></div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>児童名</label><br />
+        <input id="child" />
+      </div>
+      <div>
+        <label>対象年月</label><br />
+        <input id="ym" type="month" />
+      </div>
+      <div>
+        <label>トークン</label><br />
+        <input id="token" />
+      </div>
+      <div style="margin-left:auto">
+        <button id="build">表を作成</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="tableCard" style="display:none">
+    <div style="overflow:auto;max-height:70vh">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th><th>曜</th><th>区分</th>
+            <th>お迎え</th><th>他</th>
+            <th>開始</th><th>終了</th>
+            <th>お送り</th><th>他</th>
+            <th>個別相談</th><th>セミナー</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <button id="submit">この内容で送信</button>
+      <div id="status" class="small"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+  // ▼ここだけ置換（Apps Script WebアプリURL）
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbynubZSZ092QRjO9oHSPS-cR9rqoyQZlOXm9saVLWVkQYwvukxWXDaViqOG4BEEUWNHNA/exec";
+
+  const alertBox = document.getElementById('alert');
+  const childEl = document.getElementById('child');
+  const ymEl = document.getElementById('ym');
+  const tokenEl = document.getElementById('token');
+  const tbody = document.getElementById('tbody');
+  const tableCard = document.getElementById('tableCard');
+  const statusEl = document.getElementById('status');
+
+  function showAlert(msg, ok=false){
+    alertBox.style.display = "block";
+    alertBox.className = "card msg " + (ok ? "ok" : "ng");
+    alertBox.textContent = msg;
+  }
+
+  function qp(name){
+    const u = new URL(location.href);
+    return u.searchParams.get(name) || "";
+  }
+
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function youbi(d){ return ['日','月','火','水','木','金','土'][d.getDay()]; }
+
+  // URLパラメータから自動入力
+  childEl.value = decodeURIComponent(qp('child') || '');
+  tokenEl.value = decodeURIComponent(qp('token') || '');
+
+  // 初期：来月
+  (function(){
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth()+1, 1);
+    ymEl.value = `${next.getFullYear()}-${pad2(next.getMonth()+1)}`;
+  })();
+
+  document.getElementById('build').addEventListener('click', () => {
+    const child = childEl.value.trim();
+    const token = tokenEl.value.trim();
+    const ym = ymEl.value.trim();
+    if(!child || !token || !ym){
+      showAlert("児童名・年月・トークンを入れてください");
+      return;
+    }
+    buildTable(ym);
+    tableCard.style.display = "block";
+    showAlert("表を作成しました。入力して送信してください。", true);
+  });
+
+  function buildTable(ym){
+    tbody.innerHTML = "";
+    const [yS, mS] = ym.split("-");
+    const y = Number(yS), m = Number(mS);
+    const days = new Date(y, m, 0).getDate();
+
+    for(let d=1; d<=days; d++){
+      const date = new Date(y, m-1, d);
+      const ymd = `${y}-${pad2(m)}-${pad2(d)}`;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${m}月${d}日<input type="hidden" data-k="date" value="${ymd}"></td>
+        <td>${youbi(date)}</td>
+        <td>
+          <select data-k="type">
+            <option value="">利用なし</option>
+            <option value="平日">平日</option>
+            <option value="休日AM">休日AM</option>
+            <option value="休日PM">休日PM</option>
+            <option value="休日1日">休日1日</option>
+          </select>
+        </td>
+        <td>
+          <select data-k="pickupType">
+            <option value="">-</option>
+            <option value="家">家</option>
+            <option value="幼保">幼保</option>
+            <option value="連">連</option>
+            <option value="他">他</option>
+          </select>
+        </td>
+        <td><input data-k="pickupOther" placeholder="他の場合のみ"></td>
+        <td><input data-k="start" type="time"></td>
+        <td><input data-k="end" type="time"></td>
+        <td>
+          <select data-k="dropoffType">
+            <option value="">-</option>
+            <option value="家">家</option>
+            <option value="幼保">幼保</option>
+            <option value="迎">迎</option>
+            <option value="他">他</option>
+          </select>
+        </td>
+        <td><input data-k="dropoffOther" placeholder="他の場合のみ"></td>
+        <td style="text-align:center"><input data-k="consult" type="checkbox"></td>
+        <td style="text-align:center"><input data-k="seminar" type="checkbox"></td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  document.getElementById('submit').addEventListener('click', async () => {
+    const child = childEl.value.trim();
+    const token = tokenEl.value.trim();
+    const ym = ymEl.value.trim();
+
+    const trs = Array.from(tbody.querySelectorAll('tr'));
+    const rows = [];
+
+    for(const tr of trs){
+      const get = (k) => tr.querySelector(`[data-k="${k}"]`);
+      const type = get('type').value.trim();
+      if(!type) continue;
+
+      rows.push({
+        date: get('date').value,
+        type,
+        pickupType: get('pickupType').value,
+        pickupOther: get('pickupOther').value,
+        start: get('start').value,
+        end: get('end').value,
+        dropoffType: get('dropoffType').value,
+        dropoffOther: get('dropoffOther').value,
+        consult: get('consult').checked,
+        seminar: get('seminar').checked
+      });
+    }
+
+    const payload = { child, token, yearMonth: ym, rows };
+
+    statusEl.textContent = "送信中…";
+    try{
+      await fetch(GAS_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "payload=" + encodeURIComponent(JSON.stringify(payload))
+      });
+      statusEl.textContent = "送信しました。";
+      showAlert("送信しました。", true);
+    }catch(e){
+      statusEl.textContent = "";
+      showAlert("送信に失敗しました。通信環境を確認してください。");
+    }
+  });
+</script>
+</body>
+</html>
