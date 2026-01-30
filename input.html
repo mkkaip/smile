@@ -77,7 +77,9 @@
 
 <script>
   // ▼ここだけ置換（Apps Script WebアプリURL）
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbynubZSZ092QRjO9oHSPS-cR9rqoyQZlOXm9saVLWVkQYwvukxWXDaViqOG4BEEUWNHNA/exec";
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbxnGBv-lRQ_kdBNflM6uBP3hlQKmpBPXrIrs3VLNd-UIBgzD9DgOxbvOfoxwnmu5wqhDA/exec";
+  const ACCESS_KEY = new URL(location.href).searchParams.get("k") || "";
+
 
   const alertBox = document.getElementById('alert');
   const childEl = document.getElementById('child');
@@ -204,7 +206,7 @@
       });
     }
 
-    const payload = { child, token, yearMonth: ym, rows };
+    const payload = { key: ACCESS_KEY, child, yearMonth: ym, rows };
 
     statusEl.textContent = "送信中…";
     try{
